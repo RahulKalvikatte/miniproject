@@ -66,7 +66,7 @@ class AssistantGUI:
 
     def display_response(self, message):
         self.response_text.config(state=tk.NORMAL)
-        self.response_text.insert(tk.END, message + "\n\n")
+        self.response_text.insert(tk.END, message + "\n")
         self.response_text.config(state=tk.DISABLED)
         self.response_text.see(tk.END)
 
@@ -77,9 +77,9 @@ class AssistantGUI:
         self.assistant.start_assistant(self.display_response)
 
     def open_chat_window(self):
-        """Opens the chat window and closes the main application."""
-        self.root.destroy()  # Close the main window
-        subprocess.Popen([sys.executable, "chat_window.py"])  # Open chat window
+       
+        self.root.destroy() 
+        subprocess.Popen([sys.executable, "chat_window.py"])
 
 def main():
     root = tk.Tk()

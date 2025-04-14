@@ -8,10 +8,11 @@ import pyttsx3
 import pygetwindow as gw
 import psutil
 import os
-
+import google.generativeai as genai
+from api import genai,model
 
 class VoiceAssistant:
-    def __init__(self, wake_word="hi alexa"):
+    def __init__(self, wake_word="alexa"):
         self.wake_word = wake_word.lower()
 
     def initialize_engine(self):
@@ -30,33 +31,32 @@ class VoiceAssistant:
     def take_command(self):
         recognizer = sr.Recognizer()
         with sr.Microphone() as source:
-            print("Listening for wake word...")
             recognizer.adjust_for_ambient_noise(source, duration=0.5)
-            
-            while True:
-                try:
-                    audio = recognizer.listen(source)
-                    query = recognizer.recognize_google(audio, language="en-in").lower()
-                    print(f"Heard: {query}")
-                    
-                    if self.wake_word in query:
-                        active_window = gw.getActiveWindow()
-                        assistant_window_title = "voice assistant"
-
-                        if active_window:
-                            window_title = active_window.title.lower()
-                            if assistant_window_title not in window_title:
-                                active_window.minimize()
-                        
-                        self.speak("Yes, how can I assist you?")
-                        return self.listen_command()
-                except Exception:
-                    continue
+            active_window=gw.getActiveWindowTitle()
+            print(active_window)
+            if(active_window=="Voice Assistant"):
+                return self.listen_command()
+            else:
+                while True:
+                    try:
+                        audio = recognizer.listen(source)
+                        query = recognizer.recognize_google(audio, language="en-in").lower()
+                        if self.wake_word in query:
+                            for w in gw.getAllWindows():
+                                if "Voice Assistant" not in w.title:
+                                    try:
+                                        w.minimize()
+                                    except:
+                                        pass
+                            return self.listen_command()
+                    except Exception:
+                        continue
 
     def listen_command(self):
+        self.speak("listening...")
         recognizer = sr.Recognizer()
         with sr.Microphone() as source:
-            print("Listening...")
+            
             recognizer.adjust_for_ambient_noise(source, duration=0.5)
             audio = recognizer.listen(source)
             try:
@@ -64,25 +64,7 @@ class VoiceAssistant:
                 print(f"User said: {query}")
                 return query
             except Exception:
-                self.speak("Try again")
                 return ""
-
-    def cal_day(self):
-        day = datetime.datetime.today().weekday() + 1
-        day_dict = {
-            1: "Monday", 2: "Tuesday", 3: "Wednesday",
-            4: "Thursday", 5: "Friday", 6: "Saturday", 7: "Sunday"
-        }
-        return day_dict.get(day, "Unknown")
-
-    def DayTime(self, display_response):
-        hour = int(datetime.datetime.now().hour)
-        t = time.strftime("%I:%M %p")
-        day = self.cal_day()
-        greeting = "Good morning" if hour < 12 else "Good afternoon" if hour < 17 else "Good evening"
-        response = f"{greeting}, boss. It's {day} and the time is {t}"
-        display_response(response)
-        self.speak(response)
 
     def open_file(self, file_name):
         try:
@@ -100,28 +82,42 @@ class VoiceAssistant:
     def handle_command(self, display_response):
         command = self.take_command()
         display_response(f"User said: {command}\n")
-        
-        if "start" in command:
-            open(command[6:])
-        elif "open" in command:
-            if "file" in command:
-                file_name = command.replace("open file ", "").strip()
-                self.open_file(file_name)
-            else:
-                url = command[5:]
-                webbrowser.open(f"https://www.{url}.com")
-        elif "play" in command:
-            webbrowser.open(f"https://www.youtube.com/results?search_query=play+{command}")
-        elif "stop assistant" in command:
-            self.speak("Stopping the assistant. Thank you, Sir.")
-            sys.exit()
-        elif "tell me time" in command:
-            self.DayTime(display_response)
-        elif "close" in command:
-            app_name = command.replace("close ", "").strip()
-            self.close_application(app_name)
+        if command=="":
+               self.speak("please try again ..")
+               self.handle_command()
         else:
-            webbrowser.open(f"https://www.google.com/search?q={command}")
+
+            if "start" in command:
+                open(command[6:])
+            elif "open" in command:
+                if "file" in command:
+                    file_name = command.replace("open file ", "").strip()
+                    self.open_file(file_name)
+                else:
+                    url = command[5:]
+                    webbrowser.open(f"https://www.{url}.com")
+            elif "play" in command:
+                webbrowser.open(f"https://www.youtube.com/results?search_query=play+{command}")
+            elif "stop assistant" in command:
+                self.speak("Stopping the assistant. Thank you, Sir.")
+                sys.exit()
+            elif "close" in command:
+                app_name = command.replace("close ", "").strip()
+                self.close_application(app_name)
+            elif "search on google" in command.lower():
+                webbrowser.open(f"https://www.google.com/search?q={command}")    
+
+            else:
+                response = model.generate_content(command)
+                full_text = response.text.strip()
+
+                # Generate a short spoken summary
+                summary_prompt = f"Summarize this in one sentence for speaking aloud:\n\n{full_text}"
+                summary = model.generate_content(summary_prompt).text.strip()
+
+                self.speak(summary)
+                display_response(full_text)
+
 
     def close_application(self, app_name):
         for process in psutil.process_iter(attrs=['pid', 'name']):
@@ -134,9 +130,9 @@ class VoiceAssistant:
                     self.speak(f"Could not close {app_name}. Error: {str(e)}")
                     return
         self.speak(f"{app_name} is not running.")
-
+    
     def start_assistant(self, display_response):
-        self.speak("Assistant is ready. Say 'hi alexa' to activate.")
-        display_response("Assistant is ready. Say 'hi alexa' to activate.\n")
+        self.speak("Assistant is ready.")
+        
         while True:
             self.handle_command(display_response)
